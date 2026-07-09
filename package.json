@@ -1,0 +1,13 @@
+{
+  "name": "bluetooth-scanner",
+  "version": "1.0.0",
+  "description": "网页蓝牙设备扫描器 - BLE + 经典蓝牙",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

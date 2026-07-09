@@ -1,0 +1,1370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>蓝牙设备扫描器</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0f1117;
+    --surface:   #1a1d27;
+    --surface2:  #252836;
+    --border:    #2d3143;
+    --text:      #e4e6ef;
+    --text-dim:  #8b8fa3;
+    --accent:    #4f9cf7;
+    --accent2:   #30d6a4;
+    --ble:       #7c5cf7;
+    --warning:   #f7a04f;
+    --danger:    #f75f6e;
+    --radius:    12px;
+    --radius-sm: 8px;
+  }
+
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'PingFang SC',
+                 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #1a1d27 0%, #1e1a2e 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .logo {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, var(--ble), #3b82f6);
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  .title-group h1 { font-size: 1.3rem; font-weight: 600; }
+  .title-group p  { font-size: 0.82rem; color: var(--text-dim); }
+
+  .header-right { display: flex; align-items: center; gap: 10px; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 20px; border-radius: var(--radius-sm);
+    font-size: 0.88rem; font-weight: 500;
+    border: 1px solid transparent; cursor: pointer;
+    transition: all 0.2s; font-family: inherit; white-space: nowrap;
+  }
+  .btn-ble   { background: var(--ble); color: #fff; }
+  .btn-ble:hover   { filter: brightness(1.15); transform: translateY(-1px); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { filter: brightness(1.15); transform: translateY(-1px); }
+  .btn-sm {
+    padding: 5px 12px; font-size: 0.76rem; border-radius: 6px;
+    display: inline-flex; align-items: center; gap: 4px;
+    border: 1px solid transparent; cursor: pointer;
+    transition: all 0.2s; font-family: inherit; white-space: nowrap;
+  }
+  .btn-connect    { background: var(--accent2); color: #000; }
+  .btn-connect:hover    { filter: brightness(1.15); }
+  .btn-disconnect { background: transparent; color: var(--danger); border-color: var(--danger); }
+  .btn-disconnect:hover { background: var(--danger); color: #fff; }
+  .btn-reset { background: transparent; color: var(--text); border-color: var(--border); }
+  .btn-reset:hover { background: var(--surface2); }
+
+  /* Stats */
+  .stats-bar {
+    display: flex; gap: 28px; padding: 16px 32px;
+    border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .stat-item { display: flex; align-items: baseline; gap: 6px; }
+  .stat-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .stat-dot.ble    { background: var(--ble); }
+  .stat-value { font-size: 1.4rem; font-weight: 700; }
+  .stat-label { font-size: 0.8rem; color: var(--text-dim); }
+
+  /* Main */
+  .main { padding: 24px 32px; max-width: 1100px; }
+
+  /* Info banner */
+  .info-banner {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 20px;
+    margin-bottom: 20px; font-size: 0.84rem; color: var(--text-dim);
+    display: flex; align-items: flex-start; gap: 10px;
+  }
+  .info-banner strong { color: var(--accent2); }
+
+  /* Device grid */
+  .device-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+
+  .device-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 22px;
+    transition: all 0.25s; position: relative; overflow: hidden;
+  }
+  .device-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    transform: translateY(-2px);
+  }
+  .device-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 3px; background: var(--ble);
+  }
+  .device-card.new-device { animation: slideIn 0.4s ease-out; }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .card-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .device-name {
+    font-weight: 600; font-size: 1rem; word-break: break-all;
+  }
+  .device-id {
+    font-size: 0.75rem; color: var(--text-dim);
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    word-break: break-all;
+    margin-top: 2px;
+  }
+  .type-badge {
+    padding: 3px 10px; border-radius: 12px; font-size: 0.72rem;
+    font-weight: 600; flex-shrink: 0;
+  }
+  .type-badge { background: rgba(124,92,247,0.15); color: var(--ble); }
+
+  .card-body { display: flex; flex-direction: column; gap: 6px; }
+  .info-row { display: flex; align-items: center; gap: 8px; font-size: 0.84rem; }
+  .info-label { color: var(--text-dim); min-width: 52px; font-size: 0.78rem; }
+  .info-value {
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.82rem; word-break: break-all;
+  }
+
+  .service-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+  .service-tag {
+    padding: 2px 9px; border-radius: 11px; font-size: 0.72rem;
+    background: rgba(79,156,247,0.12); color: var(--accent);
+    border: 1px solid rgba(79,156,247,0.2);
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  }
+
+  .time-ago { font-size: 0.74rem; color: var(--text-dim); margin-top: 4px; }
+
+  /* Connection status */
+  .conn-status {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 0.76rem; font-weight: 500;
+  }
+  .conn-dot {
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  }
+  .conn-dot.connected    { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+  .conn-dot.disconnected { background: var(--text-dim); }
+  .conn-dot.connecting   { background: var(--warning); animation: pulse 0.8s infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.4; transform: scale(1.3); }
+  }
+
+  .card-actions {
+    display: flex; gap: 6px; margin-top: 10px; padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Empty state */
+  .empty-state {
+    grid-column: 1 / -1; text-align: center; padding: 50px 20px;
+  }
+  .empty-icon { font-size: 52px; margin-bottom: 14px; opacity: 0.5; }
+  .empty-title { font-size: 1.05rem; font-weight: 600; margin-bottom: 8px; }
+  .empty-desc { font-size: 0.85rem; color: var(--text-dim); max-width: 460px; margin: 0 auto 20px; line-height: 1.7; }
+
+  /* Toast */
+  .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 100; display: flex; flex-direction: column-reverse; gap: 8px; }
+  .toast {
+    padding: 12px 20px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); font-size: 0.84rem;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    animation: toastIn 0.3s ease-out; max-width: 380px;
+  }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(24px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  @media (max-width: 640px) {
+    .header, .stats-bar, .tabs, .main { padding-left: 16px; padding-right: 16px; }
+    .device-grid { grid-template-columns: 1fr; }
+    .header { flex-direction: column; align-items: flex-start; }
+  }
+
+  /* ================================================================
+     WiFi Provisioning Modal
+     ================================================================ */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.65);
+    display: flex; align-items: center; justify-content: center;
+    animation: fadeIn 0.2s ease-out;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); width: 520px; max-width: 94vw;
+    max-height: 85vh; display: flex; flex-direction: column;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.5);
+  }
+  .modal-header {
+    padding: 16px 22px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-header h3 { font-size: 1.05rem; }
+  .modal-close {
+    background: none; border: none; color: var(--text-dim); cursor: pointer;
+    font-size: 1.4rem; padding: 4px 8px; border-radius: 4px;
+  }
+  .modal-close:hover { color: var(--text); background: var(--surface2); }
+  .modal-body { padding: 18px 22px; overflow-y: auto; flex: 1; }
+  .modal-footer { padding: 12px 22px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* Provisioning steps */
+  .prov-step { margin-bottom: 16px; }
+  .prov-step-title { font-size: 0.82rem; font-weight: 600; color: var(--text-dim); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  /* WiFi list */
+  .wifi-list { max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .wifi-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; cursor: pointer; transition: background 0.15s;
+    border-bottom: 1px solid var(--border);
+  }
+  .wifi-item:last-child { border-bottom: none; }
+  .wifi-item:hover { background: var(--surface2); }
+  .wifi-item.selected { background: rgba(79,156,247,0.1); border-left: 3px solid var(--accent); }
+  .wifi-item .wifi-icon { font-size: 1.1rem; flex-shrink: 0; }
+  .wifi-item .wifi-info { flex: 1; min-width: 0; }
+  .wifi-item .wifi-ssid { font-size: 0.88rem; font-weight: 500; }
+  .wifi-item .wifi-secure { font-size: 0.74rem; color: var(--text-dim); }
+  .wifi-item .wifi-signal { display: flex; gap: 2px; align-items: flex-end; flex-shrink: 0; }
+  .signal-bar {
+    width: 4px; border-radius: 1px; background: var(--text-dim);
+    transition: background 0.2s;
+  }
+  .signal-bar.good { background: var(--accent2); }
+  .signal-bar.medium { background: var(--warning); }
+  .signal-bar.weak   { background: var(--danger); }
+
+  /* Form */
+  .form-group { margin-bottom: 12px; }
+  .form-label { display: block; font-size: 0.78rem; color: var(--text-dim); margin-bottom: 4px; }
+  .form-input {
+    width: 100%; padding: 8px 12px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface2);
+    color: var(--text); font-size: 0.88rem; font-family: inherit; outline: none;
+  }
+  .form-input:focus { border-color: var(--accent); }
+
+  /* Status box */
+  .status-box {
+    padding: 12px 16px; border-radius: var(--radius-sm); font-size: 0.84rem;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .status-box.success { background: rgba(48,214,162,0.1); border: 1px solid var(--accent2); color: var(--accent2); }
+  .status-box.error   { background: rgba(247,95,110,0.1); border: 1px solid var(--danger);  color: var(--danger); }
+  .status-box.info    { background: rgba(79,156,247,0.1); border: 1px solid var(--accent); color: var(--accent); }
+  .status-icon { font-size: 1.4rem; flex-shrink: 0; }
+  .status-detail { font-size: 0.78rem; opacity: 0.8; margin-top: 2px; }
+
+  /* Spinner */
+  .spinner {
+    display: inline-block; width: 16px; height: 16px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.6s linear infinite;
+    vertical-align: middle; margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo">📶</div>
+    <div class="title-group">
+      <h1>BLE 蓝牙设备扫描器</h1>
+      <p>低功耗蓝牙 · 设备发现 & WiFi 配网</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="btn btn-ble" id="btnScanBLE" onclick="scanBLE()">
+      🔍 BLE 扫描
+    </button>
+    <button class="btn btn-danger" onclick="disconnectAll()" id="btnDisconnectAll" style="display:none;">
+      ⏏ 断开全部
+    </button>
+    <button class="btn btn-reset" onclick="clearAll()">
+      🗑 清空
+    </button>
+  </div>
+</header>
+
+<!-- Stats -->
+<div class="stats-bar">
+  <div class="stat-item">
+    <span class="stat-dot ble"></span>
+    <span class="stat-value" id="statBLE">0</span>
+    <span class="stat-label">BLE 设备</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-value" id="statLastScan">--</span>
+    <span class="stat-label">最近扫描</span>
+  </div>
+</div>
+
+<!-- Main -->
+<main class="main">
+  <div class="info-banner" id="infoBanner">
+    <span>💡</span>
+    <span>
+      <strong>BLE 扫描</strong>：点击按钮，浏览器弹出设备选择器，显示周围 BLE 设备。<br>
+      连接后可查看 GATT 服务，或使用 <strong>WiFi 配网</strong> 功能为 ESP32 配置网络。
+    </span>
+  </div>
+  <div class="device-grid" id="deviceGrid">
+    <div class="empty-state">
+      <div class="empty-icon">🔵</div>
+      <div class="empty-title">点击 "BLE 扫描" 开始搜索</div>
+      <div class="empty-desc">
+        使用浏览器内置的 Web Bluetooth API<br>
+        扫描周围的低功耗蓝牙 (BLE) 设备
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ==================================================================
+     WiFi Provisioning Modal
+     ================================================================== -->
+<div class="modal-overlay" id="provModal" style="display:none;" onclick="if(event.target===this)closeProvisionModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>📶 WiFi 配网 — <span id="provDeviceName">--</span></h3>
+      <button class="modal-close" onclick="closeProvisionModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="provModalBody">
+      <!-- Step 1: Scan -->
+      <div class="prov-step" id="provStepScan">
+        <div class="prov-step-title">① 扫描选择 WiFi</div>
+        <button class="btn btn-ble" id="btnWifiScan" onclick="scanWiFiNetworks()">
+          📡 扫描周围 WiFi
+        </button>
+        <div class="wifi-list" id="wifiList" style="margin-top:10px; display:none;"></div>
+        <div id="wifiScanStatus" style="margin-top:8px;font-size:0.82rem;color:var(--text-dim);"></div>
+      </div>
+
+      <!-- Step 2: Connect -->
+      <div class="prov-step" id="provStepConnect" style="display:none;">
+        <div class="prov-step-title">② 输入密码并连接</div>
+        <div class="form-group">
+          <label class="form-label">WiFi 名称 (SSID)</label>
+          <input class="form-input" id="provSSID" readonly style="color:var(--accent2);">
+        </div>
+        <div class="form-group">
+          <label class="form-label">WiFi 密码</label>
+          <input class="form-input" type="password" id="provPassword" placeholder="输入 WiFi 密码" onkeydown="if(event.key==='Enter')connectToWiFi()">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ble" id="btnWifiConnect" onclick="connectToWiFi()">
+            🔗 连接
+          </button>
+          <button class="btn btn-reset" onclick="resetProvisioning()">
+            ↩ 重新扫描
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 3: Result -->
+      <div class="prov-step" id="provStepResult" style="display:none;">
+        <div class="prov-step-title">③ 连接结果</div>
+        <div id="provResultBox"></div>
+        <div style="margin-top:12px;">
+          <button class="btn btn-reset" onclick="resetProvisioning()">
+            ↩ 配网其他 WiFi
+          </button>
+        </div>
+      </div>
+
+      <!-- Service detection hint -->
+      <div id="provServiceHint" style="display:none;margin-top:12px;padding:10px 14px;background:var(--surface2);border-radius:8px;font-size:0.8rem;color:var(--text-dim);">
+        ⚙️ 未检测到配网服务，请确认 ESP32 固件启用了 BLE WiFi 配网功能
+      </div>
+    </div>
+    <div class="modal-footer">
+      <span id="provStatus" style="font-size:0.8rem;color:var(--text-dim);"></span>
+      <button class="btn btn-reset" onclick="closeProvisionModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+  // =========================================================================
+  // State
+  // =========================================================================
+  let bleDevices = [];          // 已发现的 BLE 设备
+
+  // deviceId → { server: BluetoothRemoteGATTServer, device: BluetoothDevice }
+  const gattSessions = new Map();
+
+  // =========================================================================
+  // Web Bluetooth API - BLE 扫描
+  // =========================================================================
+  async function scanBLE() {
+    if (!navigator.bluetooth) {
+      showToast('⚠️ 当前浏览器不支持 Web Bluetooth API。请使用 Chrome/Edge。');
+      return;
+    }
+
+    const btn = document.getElementById('btnScanBLE');
+    btn.disabled = true;
+    btn.textContent = '⏳ 扫描中...';
+
+    try {
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [PROV_BASE]    // 必须声明，否则 6E400001 不可见
+      });
+
+      if (device) {
+        // 存储设备引用以便后续 connect/disconnect
+        const devEntry = addBLEDevice(device);
+        devEntry._bluetoothDevice = device;
+        setupDeviceListeners(device, devEntry);
+        showToast(`✅ 已添加: ${device.name || '(无名设备)'}`);
+
+        // 自动连接获取更多信息
+        await connectToDevice(devEntry.id);
+      }
+    } catch (err) {
+      if (err.name === 'NotFoundError') {
+        showToast('ℹ️ 未选择设备（已取消）');
+      } else if (err.name === 'SecurityError') {
+        showToast('⚠️ 需要用户手势才能触发蓝牙扫描，请点击按钮');
+      } else {
+        showToast('⚠️ 扫描失败: ' + err.message);
+      }
+      console.error('[BLE]', err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🔍 BLE 扫描';
+      renderAll();
+    }
+  }
+
+  // -------- 监听 BLE 设备断开事件 --------
+  function setupDeviceListeners(bluetoothDevice, devEntry) {
+    bluetoothDevice.addEventListener('gattserverdisconnected', () => {
+      console.log(`[BLE] 设备断开: ${devEntry.name}`);
+      gattSessions.delete(devEntry.id);
+      devEntry._connected = false;
+      showToast(`🔌 ${devEntry.name} 已断开`);
+      renderAll();
+    });
+  }
+
+  // -------- 添加 BLE 设备到列表 --------
+  function addBLEDevice(device) {
+    const existing = bleDevices.find(d => d.id === device.id);
+    if (existing) {
+      existing.name = device.name || existing.name;
+      existing._bluetoothDevice = device;
+      existing.lastSeen = Date.now();
+      return existing;
+    }
+
+    const entry = {
+      id: device.id,
+      name: device.name || '(无名设备)',
+      services: [],
+      lastSeen: Date.now(),
+      _connected: false,
+      _connecting: false,
+      _bluetoothDevice: device,
+    };
+    bleDevices.push(entry);
+    renderAll();
+    return entry;
+  }
+
+  // =========================================================================
+  // 连接 / 断开 BLE 设备
+  // =========================================================================
+
+  async function connectToDevice(deviceId) {
+    const dev = bleDevices.find(d => d.id === deviceId);
+    if (!dev || !dev._bluetoothDevice) return;
+
+    // 如果已连接则跳过
+    if (gattSessions.has(deviceId) && gattSessions.get(deviceId).server.connected) {
+      showToast(`ℹ️ ${dev.name} 已连接`);
+      return;
+    }
+
+    dev._connecting = true;
+    renderAll();
+
+    try {
+      console.log(`[BLE] 正在连接: ${dev.name}`);
+      const server = await dev._bluetoothDevice.gatt.connect();
+      gattSessions.set(deviceId, { server, device: dev._bluetoothDevice });
+      dev._connected = true;
+      dev._connecting = false;
+
+      // 获取 GATT 服务
+      try {
+        const services = await server.getPrimaryServices();
+        updateDeviceServices(deviceId, services);
+
+        // 检查 WiFi 配网服务 → 读取已连接状态
+        await checkWiFiStatusOnConnect(deviceId, server);
+      } catch (e) {
+        console.log('[BLE] 获取服务失败:', e.message);
+      }
+
+      showToast(`🔗 已连接: ${dev.name}`);
+    } catch (err) {
+      console.error('[BLE] 连接失败:', err);
+      dev._connected = false;
+      dev._connecting = false;
+      showToast(`❌ 连接失败: ${err.message}`);
+    } finally {
+      renderAll();
+      updateDisconnectAllButton();
+    }
+  }
+
+  async function disconnectDevice(deviceId) {
+    const session = gattSessions.get(deviceId);
+    const dev = bleDevices.find(d => d.id === deviceId);
+
+    if (session && session.server.connected) {
+      try {
+        session.server.disconnect();
+        console.log(`[BLE] 已断开: ${dev ? dev.name : deviceId}`);
+      } catch (e) {
+        console.log('[BLE] 断开异常:', e.message);
+      }
+    }
+
+    gattSessions.delete(deviceId);
+    if (dev) {
+      dev._connected = false;
+      dev._connecting = false;
+    }
+    renderAll();
+    updateDisconnectAllButton();
+    if (dev) showToast(`🔌 已断开: ${dev.name}`);
+  }
+
+  function disconnectAll() {
+    let count = 0;
+    for (const [deviceId, session] of gattSessions) {
+      try {
+        if (session.server.connected) {
+          session.server.disconnect();
+          count++;
+        }
+      } catch (_) {}
+    }
+    gattSessions.clear();
+    for (const dev of bleDevices) {
+      dev._connected = false;
+      dev._connecting = false;
+    }
+    renderAll();
+    updateDisconnectAllButton();
+    if (count > 0) showToast(`🔌 已断开 ${count} 个设备`);
+  }
+
+  function updateDisconnectAllButton() {
+    const btn = document.getElementById('btnDisconnectAll');
+    const hasConnected = [...gattSessions.values()].some(s => s.server.connected);
+    btn.style.display = hasConnected ? '' : 'none';
+  }
+
+  // =========================================================================
+  // BLE 连接后自动查询 WiFi 状态
+  // =========================================================================
+  // 读取 Status 特征值 (6E400005)，如果 WiFi 已连接则直接显示 IP 和 RSSI，
+  // 并订阅后续状态变化通知。
+  // -------------------------------------------------------------------------
+
+  async function checkWiFiStatusOnConnect(deviceId, server) {
+    const dev = bleDevices.find(d => d.id === deviceId);
+    if (!dev) return;
+
+    let provSvc;
+    try {
+      provSvc = await server.getPrimaryService(PROV_BASE);
+    } catch (_) {
+      return; // 无配网服务，跳过
+    }
+
+    let statusChar;
+    try {
+      statusChar = await provSvc.getCharacteristic(provUUID(5));
+    } catch (_) {
+      return;
+    }
+
+    // 读取当前状态
+    try {
+      const val = await statusChar.readValue();
+      const text = new TextDecoder().decode(val);
+      updateWiFiStatus(dev, text);
+    } catch (e) {
+      console.log('[WiFi状态] 读取失败:', e.message);
+    }
+
+    // 订阅状态变化通知
+    if (statusChar.properties.notify) {
+      try {
+        await statusChar.startNotifications();
+        statusChar.addEventListener('characteristicvaluechanged', function onStatusChange(event) {
+          const text = new TextDecoder().decode(event.target.value);
+          updateWiFiStatus(dev, text);
+          renderAll();
+        });
+      } catch (e) {
+        console.log('[WiFi状态] 订阅通知失败:', e.message);
+      }
+    }
+  }
+
+  function updateWiFiStatus(dev, statusText) {
+    const parts = statusText.trim().split('|');
+    const state = parts[0];
+    if (state === 'CONNECTED') {
+      dev.wifiConnected = true;
+      dev.wifiIP = parts[1] || dev.wifiIP;
+      dev.wifiRSSI = parseInt(parts[2]) || dev.wifiRSSI;
+      dev.wifiSSID = parts.length > 3 ? parts[3] : dev.wifiSSID;  // 设备返回 SSID
+      console.log(`[WiFi状态] ✅ ${dev.wifiSSID || ''} IP: ${dev.wifiIP} RSSI: ${dev.wifiRSSI}`);
+    } else {
+      dev.wifiConnected = false;
+      console.log('[WiFi状态] ❌ 未连接');
+    }
+    renderAll();
+  }
+
+  // =========================================================================
+  // WiFi 配网 — BLE Provisioning
+  // =========================================================================
+  // 协议: doc/ble.md — NimBLE GATT 配网服务
+  //   基础 UUID: 6E400001-B5A3-F393-E0A9-E50E24DCCA9E
+  //   特征值:
+  //     6E400002  SSID          (Write,         32B UTF-8)
+  //     6E400003  Password      (Write,         64B UTF-8)
+  //     6E400004  Command       (Write,         1B  0x01=连接)
+  //     6E400005  Status        (Read+Notify,   文本 "CONNECTED|<IP>|<RSSI>|<SSID>")
+  //     6E400006  Scan Command  (Write,         1B  0x01=开始扫描)
+  //     6E400007  Scan Results  (Read+Notify,   文本格式见下)
+  //     6E400008  Select SSID   (Write,         1B  索引值 0-based)
+  // -------------------------------------------------------------------------
+
+  const PROV_BASE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+
+  function provUUID(byteN) {
+    const hex = byteN.toString(16).padStart(2, '0');
+    return PROV_BASE.replace(/^(.{6}).{2}/, '$1' + hex);
+  }
+
+  function normUUID(uuid) {
+    return (uuid || '').replace(/-/g, '').toLowerCase();
+  }
+
+  let provDeviceId   = null;
+  let provDevice     = null;       // BluetoothDevice
+  let provServer     = null;       // GATT server
+
+  // 特征值引用
+  let provChars      = {};         // { ssid, password, command, status, scanCmd, scanResult, selectSsid }
+  let wifiScanResults = [];        // [{idx, ssid, rssi, auth}]
+  let selectedWifi    = null;
+
+  // -------- 打开配网模态框 --------
+  async function openProvisionModal(deviceId) {
+    const dev = bleDevices.find(d => d.id === deviceId);
+    if (!dev || !dev._bluetoothDevice) {
+      showToast('⚠️ 设备信息丢失，请重新扫描');
+      return;
+    }
+
+    provDeviceId = deviceId;
+    provDevice = dev._bluetoothDevice;
+    document.getElementById('provDeviceName').textContent = dev.name;
+    document.getElementById('provModal').style.display = 'flex';
+    resetProvisioningUI();
+
+    try {
+      document.getElementById('provStatus').textContent = '正在确保连接...';
+
+      // 确保 BLE 已连接
+      const session = gattSessions.get(deviceId);
+      const wasConnected = provDevice.gatt.connected;
+
+      if (!wasConnected || !session) {
+        console.log('[配网] 设备未连接，正在连接...');
+        provServer = await provDevice.gatt.connect();
+        gattSessions.set(deviceId, { server: provServer, device: provDevice });
+        dev._connected = true; dev._connecting = false;
+      } else {
+        provServer = session.server;
+      }
+
+      console.log('[配网] 连接状态:', provServer.connected, '| 设备:', provDevice.name);
+
+      document.getElementById('provStatus').textContent = '正在搜索配网服务...';
+      const found = await discoverProvisioningService();
+      if (found) {
+        document.getElementById('provStatus').textContent = '✅ 配网服务就绪';
+        document.getElementById('provServiceHint').style.display = 'none';
+        document.getElementById('provStepScan').style.display = '';
+        // 自动开始扫描 WiFi
+        setTimeout(() => scanWiFiNetworks(), 300);
+      } else {
+        document.getElementById('provStatus').textContent = '⚠️ 未检测到配网服务';
+      }
+    } catch (err) {
+      console.error('[配网] 连接失败:', err);
+      document.getElementById('provStatus').textContent = '❌ ' + err.message;
+      document.getElementById('provServiceHint').style.display = '';
+    }
+  }
+
+  // -------- 发现配网服务 --------
+  async function discoverProvisioningService() {
+    // optionalServices 已在 requestDevice 中声明 PROV_BASE，
+    // Web Bluetooth 确保 getPrimaryService 能直接找到。
+    await new Promise(r => setTimeout(r, 500));
+
+    // 方法 1: 直接 getPrimaryService (文档推荐方式)
+    try {
+      const svc = await provServer.getPrimaryService(PROV_BASE);
+      if (svc) {
+        console.log('[配网] ✓ getPrimaryService 成功:', svc.uuid);
+        return await setupProvisioningChars(svc);
+      }
+    } catch (e) {
+      console.warn('[配网] getPrimaryService 未命中:', e.message);
+    }
+
+    // 方法 2: 枚举并归一化匹配
+    let services = [];
+    try {
+      services = await provServer.getPrimaryServices();
+    } catch (_) {}
+
+    for (const svc of services) {
+      if (normUUID(svc.uuid) === normUUID(PROV_BASE)) {
+        console.log('[配网] ✓ 枚举匹配:', svc.uuid);
+        return await setupProvisioningChars(svc);
+      }
+    }
+
+    showDiagnostic(services);
+    return false;
+  }
+
+  function showDiagnostic(services) {
+    const hint = document.getElementById('provServiceHint');
+    let html = `⚙️ <strong>未检测到配网服务</strong><br>`;
+    html += `期望 UUID: <code style="font-size:0.72rem;">${PROV_BASE}</code><br>`;
+    if (services.length === 0) {
+      html += `⚠️ 设备未返回任何 GATT 服务。可能原因:<br>
+        · BLE 连接已断开<br>
+        · 设备固件未初始化 GATT 服务<br>
+        · 浏览器未声明 optionalServices`;
+    } else {
+      html += `设备返回 ${services.length} 个服务:<br>`;
+      for (const svc of services) {
+        html += `<code style="font-size:0.7rem;word-break:break-all;">  ${esc(svc.uuid)}</code><br>`;
+      }
+      html += `<br>请确认: ① ESP32 固件已编译 WiFi Config 服务<br>`;
+      html += `&emsp;&emsp;&emsp; ② 浏览器已声明 optionalServices 包含该 UUID`;
+    }
+    html += `<br><button class="btn-sm btn-connect" onclick="retryDiscover()" style="margin-top:6px;">🔄 重试发现</button>`;
+    hint.innerHTML = html;
+    hint.style.display = '';
+  }
+
+  async function retryDiscover() {
+    document.getElementById('provStatus').textContent = '正在重试...';
+    document.getElementById('provServiceHint').style.display = 'none';
+    const found = await discoverProvisioningService();
+    if (found) {
+      document.getElementById('provStatus').textContent = '✅ 配网服务就绪';
+      document.getElementById('provStepScan').style.display = '';
+    } else {
+      document.getElementById('provStatus').textContent = '⚠️ 未检测到配网服务';
+    }
+  }
+
+  async function setupProvisioningChars(svc) {
+    const chars = await svc.getCharacteristics();
+    const map = {};
+    for (const c of chars) {
+      const uuid = c.uuid.toLowerCase();
+      if      (uuid === provUUID(2)) map.ssid        = c;
+      else if (uuid === provUUID(3)) map.password    = c;
+      else if (uuid === provUUID(4)) map.command     = c;
+      else if (uuid === provUUID(5)) map.status      = c;
+      else if (uuid === provUUID(6)) map.scanCmd     = c;
+      else if (uuid === provUUID(7)) map.scanResult  = c;
+      else if (uuid === provUUID(8)) map.selectSsid  = c;
+    }
+
+    if (!map.ssid || !map.password || !map.command || !map.status) {
+      console.warn('[配网] 缺少核心特征值 (需要 6E400002~05)');
+      return false;
+    }
+
+    provChars = map;
+    provChars._svc = svc;   // 缓存服务引用
+    console.log('[配网] 特征值: SSID ✓ Password ✓ Command ✓ Status ✓' +
+      (map.scanCmd ? ' ScanCmd ✓' : '') +
+      (map.scanResult ? ' ScanResult ✓' : '') +
+      (map.selectSsid ? ' SelectSSID ✓' : ''));
+
+    // 订阅 Status 通知
+    if (provChars.status.properties.notify) {
+      await provChars.status.startNotifications();
+      provChars.status.addEventListener('characteristicvaluechanged', handleStatusNotify);
+    }
+
+    // 订阅 Scan Results 通知（如果有）
+    if (provChars.scanResult && provChars.scanResult.properties.notify) {
+      await provChars.scanResult.startNotifications();
+      provChars.scanResult.addEventListener('characteristicvaluechanged', handleScanResultNotify);
+    }
+
+    return true;
+  }
+
+  // -------- Status 通知: "CONNECTED|<IP>|<RSSI>|<SSID>" / "DISCONNECTED|0.0.0.0|0" --------
+  let provConnectTimer = null;  // 配网超时计时器
+
+  function handleStatusNotify(event) {
+    const text = new TextDecoder().decode(event.target.value);
+    console.log('[配网 Status]', text);
+    const parts = text.trim().split('|');
+    const state = parts[0] || 'UNKNOWN';
+
+    const box = document.getElementById('provResultBox');
+    document.getElementById('provStepResult').style.display = '';
+
+    if (state === 'CONNECTED') {
+      // 取消超时计时器
+      if (provConnectTimer) { clearTimeout(provConnectTimer); provConnectTimer = null; }
+
+      const ip   = parts[1] || '--';
+      const rssi = parts[2] || '--';
+      let ssid = parts[3] || '';
+      if (!ssid && selectedWifi) ssid = selectedWifi.ssid;  // 兜底取用户选择的网络名
+
+      box.innerHTML = `<div class="status-box success">
+        <span class="status-icon">✅</span>
+        <div>
+          <div style="font-weight:600;">WiFi 连接成功！</div>
+          <div class="status-detail">
+            ${ssid ? `<div>📡 网络: <strong>${esc(ssid)}</strong></div>` : ''}
+            <div>🌐 IP 地址: <strong>${esc(ip)}</strong></div>
+            <div>📶 信号强度: <strong>${esc(rssi)} dBm</strong></div>
+          </div>
+        </div>
+      </div>`;
+
+      document.getElementById('provStatus').textContent = `✅ 已连接 · ${ssid} · ${ip}`;
+      document.getElementById('btnWifiConnect').disabled = false;
+      document.getElementById('btnWifiConnect').textContent = '🔗 连接';
+      document.getElementById('provResultBox').dataset.done = '1';
+      showToast(`✅ WiFi ${ssid} 连接成功! IP: ${ip}`);
+
+      const dev = bleDevices.find(d => d.id === provDeviceId);
+      if (dev) {
+        dev.wifiConnected = true;
+        dev.wifiIP = ip;
+        dev.wifiSSID = ssid || selectedWifi?.ssid || dev.wifiSSID;
+        dev.wifiRSSI = parseInt(rssi);
+        dev.lastSeen = Date.now();
+        renderAll();
+      }
+    } else if (state === 'DISCONNECTED') {
+      // 配网过程中 DISCONNECTED 是中间状态（断开旧状态准备连接新 WiFi），不报错
+      if (document.getElementById('provResultBox').dataset.done) return;
+
+      if (document.getElementById('btnWifiConnect').disabled) {
+        // 正在配网中 → 显示等待，不报错
+        box.innerHTML = `<div class="status-box info">
+          <span class="status-icon">⏳</span>
+          <div>
+            <div style="font-weight:600;">正在连接 WiFi...</div>
+            <div class="status-detail">等待设备获取 IP 地址，约 10-20 秒</div>
+          </div>
+        </div>`;
+        document.getElementById('provStatus').textContent = '⏳ 正在连接，请稍候...';
+      } else {
+        // 非配网状态断联 → 正常显示
+        box.innerHTML = `<div class="status-box error">
+          <span class="status-icon">❌</span>
+          <div>
+            <div style="font-weight:600;">WiFi 未连接</div>
+            <div class="status-detail">设备当前未连接到 WiFi</div>
+          </div>
+        </div>`;
+        document.getElementById('provStatus').textContent = '⚠️ 未连接';
+      }
+    }
+  }
+
+  // -------- Scan Results 通知: "3 AP(s) found\n0|MyWiFi|-45|WPA2\n..." --------
+  function handleScanResultNotify(event) {
+    const text = new TextDecoder().decode(event.target.value);
+    console.log('[配网 Scan]', text);
+    parseScanResults(text);
+  }
+
+  async function readScanResults() {
+    if (!provChars.scanResult) return;
+    try {
+      const val = await provChars.scanResult.readValue();
+      const text = new TextDecoder().decode(val);
+      console.log('[配网 Scan Read]', text);
+      parseScanResults(text);
+    } catch (e) {
+      console.warn('[配网] 读取扫描结果失败:', e.message);
+    }
+  }
+
+  function parseScanResults(text) {
+    const lines = text.trim().split('\n');
+    wifiScanResults = [];
+    for (const line of lines) {
+      if (line.includes('AP(s) found')) continue;  // header line
+      const parts = line.split('|');
+      if (parts.length >= 4) {
+        wifiScanResults.push({
+          idx:  parseInt(parts[0]),
+          ssid: parts[1],
+          rssi: parseInt(parts[2]),
+          auth: parts[3],   // OPEN, WEP, WPA, WPA2, WPA3, WPA/WPA2, WPA2_ENT, WPA2/WPA3, WAPI
+        });
+      }
+    }
+    renderWifiList();
+    document.getElementById('wifiScanStatus').textContent = `找到 ${wifiScanResults.length} 个 WiFi 网络`;
+  }
+
+  // -------- 发送单字节命令到指定特征值 --------
+  async function writeByteChar(chr, byteVal) {
+    if (!chr) throw new Error('特征值未就绪');
+    const buf = new Uint8Array([byteVal]);
+    if (chr.properties.writeWithoutResponse) {
+      await chr.writeValueWithoutResponse(buf);
+    } else {
+      await chr.writeValue(buf);
+    }
+  }
+
+  async function writeStringChar(chr, str) {
+    if (!chr) throw new Error('特征值未就绪');
+    const enc = new TextEncoder();
+    if (chr.properties.writeWithoutResponse) {
+      await chr.writeValueWithoutResponse(enc.encode(str));
+    } else {
+      await chr.writeValue(enc.encode(str));
+    }
+  }
+
+  // -------- 扫描 WiFi (写入 0x01 到 Scan Command) --------
+  async function scanWiFiNetworks() {
+    if (!provChars.scanCmd) {
+      showToast('⚠️ 此固件不支持扫描功能，请使用手动输入模式');
+      return;
+    }
+
+    wifiScanResults = [];
+    selectedWifi = null;
+    document.getElementById('wifiScanStatus').innerHTML = '<span class="spinner"></span>正在扫描（约 3-5 秒）...';
+    document.getElementById('wifiList').style.display = 'none';
+    document.getElementById('provStepConnect').style.display = 'none';
+    document.getElementById('provStepResult').style.display = 'none';
+
+    try {
+      await writeByteChar(provChars.scanCmd, 0x01);
+      // ESP32 扫描约 3-5 秒后通过 Notify 或 Read 返回结果
+      await new Promise(r => setTimeout(r, 5000));
+      // 尝试主动读取（如果 notify 没触发）
+      if (wifiScanResults.length === 0) {
+        await readScanResults();
+      }
+      // 再等 5 秒（部分 ESP32 扫描较慢）
+      if (wifiScanResults.length === 0) {
+        await new Promise(r => setTimeout(r, 5000));
+        await readScanResults();
+      }
+      if (wifiScanResults.length === 0) {
+        document.getElementById('wifiScanStatus').textContent =
+          '⚠️ 未收到扫描结果。请重试或使用手动输入模式';
+      }
+    } catch (err) {
+      console.error('[配网] 扫描失败:', err);
+      document.getElementById('wifiScanStatus').textContent = '❌ 扫描失败: ' + err.message;
+    }
+  }
+
+  // -------- 渲染 WiFi 列表 --------
+  function renderWifiList() {
+    const list = document.getElementById('wifiList');
+    list.style.display = '';
+
+    if (wifiScanResults.length === 0) {
+      list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim);">未发现 WiFi 网络</div>';
+      return;
+    }
+
+    wifiScanResults.sort((a, b) => (b.rssi || -100) - (a.rssi || -100));
+
+    list.innerHTML = wifiScanResults.map(ap => {
+      const rssi = ap.rssi || -100;
+      const signalLevel = rssi > -50 ? 4 : rssi > -65 ? 3 : rssi > -75 ? 2 : 1;
+      const signalClass = rssi > -60 ? 'good' : rssi > -75 ? 'medium' : 'weak';
+      const bars = [1,2,3,4].map(n => {
+        const height = 6 + n * 4;
+        const on = n <= signalLevel;
+        return `<div class="signal-bar${on ? ' ' + signalClass : ''}" style="height:${height}px;"></div>`;
+      }).join('');
+
+      const isOpen = ap.auth === 'OPEN';
+      const secure = isOpen ? '🔓 开放' : '🔒 ' + esc(ap.auth);
+      const cls = selectedWifi && selectedWifi.ssid === ap.ssid ? ' selected' : '';
+
+      return `<div class="wifi-item${cls}" onclick="selectWifi('${escAttr(ap.ssid)}', '${escAttr(ap.auth)}', ${ap.idx})">
+        <span class="wifi-icon">📡</span>
+        <div class="wifi-info">
+          <div class="wifi-ssid">${esc(ap.ssid)}</div>
+          <div class="wifi-secure">${secure} · ${rssi} dBm</div>
+        </div>
+        <div class="wifi-signal">${bars}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // -------- 选中 WiFi（扫描模式） --------
+  function selectWifi(ssid, auth, idx) {
+    selectedWifi = { ssid, auth, idx };
+    document.getElementById('provSSID').value = ssid;
+    document.getElementById('provPassword').value = '';
+    document.getElementById('provStepConnect').style.display = '';
+    document.getElementById('provStepResult').style.display = 'none';
+    renderWifiList();
+
+    if (auth === 'OPEN') {
+      document.getElementById('provPassword').placeholder = '开放网络，无需密码';
+      document.getElementById('provPassword').disabled = true;
+    } else {
+      document.getElementById('provPassword').placeholder = '输入 WiFi 密码';
+      document.getElementById('provPassword').disabled = false;
+    }
+    document.getElementById('provPassword').focus();
+  }
+
+  // -------- 切换手动输入模式 --------
+  // -------- 连接 WiFi (doc 配网流程) --------
+  async function connectToWiFi() {
+    const ssid = document.getElementById('provSSID').value.trim();
+    const password = document.getElementById('provPassword').value;
+
+    if (!ssid) { showToast('⚠️ 请先扫描选择 WiFi'); return; }
+    if (!selectedWifi) { showToast('⚠️ 请先扫描选择 WiFi'); return; }
+    if (selectedWifi.auth !== 'OPEN' && !password) {
+      showToast('⚠️ 请输入 WiFi 密码'); return;
+    }
+
+    // 清除之前的结果标记
+    document.getElementById('provResultBox').dataset.done = '';
+    if (provConnectTimer) { clearTimeout(provConnectTimer); provConnectTimer = null; }
+
+    document.getElementById('btnWifiConnect').disabled = true;
+    document.getElementById('btnWifiConnect').textContent = '⏳ 连接中...';
+    document.getElementById('provStatus').innerHTML = '<span class="spinner"></span>正在配网...';
+
+    try {
+      // 步骤 1: 写入 SSID (特征值 6E400002)
+      console.log('[配网] 写入 SSID:', ssid);
+      await writeStringChar(provChars.ssid, ssid);
+
+      // 步骤 2: 如果扫描模式，写入 Select SSID 索引 (特征值 6E400008)
+      if (selectedWifi && provChars.selectSsid) {
+        console.log('[配网] 写入 Select SSID index:', selectedWifi.idx);
+        await writeByteChar(provChars.selectSsid, selectedWifi.idx);
+      }
+
+      // 步骤 3: 写入 Password (特征值 6E400003)
+      if (password) {
+        console.log('[配网] 写入 Password (' + password.length + ' 字节)');
+        await writeStringChar(provChars.password, password);
+      }
+
+      // 步骤 4: 写入 Command = 0x01 (特征值 6E400004)
+      console.log('[配网] 写入 Command = 0x01');
+      await writeByteChar(provChars.command, 0x01);
+
+      // 等待 Status 通知（handleStatusNotify 会处理结果）
+      // 设 20 秒超时，因为 ESP32 连 WiFi + DHCP 可能需要 10-15 秒
+      document.getElementById('provStatus').textContent = '⏳ 配网命令已发送，等待连接（约 10-20 秒）...';
+      provConnectTimer = setTimeout(() => {
+        const box = document.getElementById('provResultBox');
+        // 如果还没收到 CONNECTED，显示超时提示
+        if (!box.dataset.done) {
+          document.getElementById('provResultBox').innerHTML = `<div class="status-box error">
+            <span class="status-icon">⏰</span>
+            <div>
+              <div style="font-weight:600;">连接超时</div>
+              <div class="status-detail">设备未返回连接成功，请检查 SSID 和密码是否正确</div>
+            </div>
+          </div>`;
+          document.getElementById('provStatus').textContent = '❌ 超时';
+          document.getElementById('btnWifiConnect').disabled = false;
+          document.getElementById('btnWifiConnect').textContent = '🔗 重试';
+          showToast('⚠️ WiFi 连接超时');
+        }
+        provConnectTimer = null;
+      }, 20000);
+    } catch (err) {
+      console.error('[配网] 发送失败:', err);
+      document.getElementById('provStatus').textContent = '❌ 发送失败: ' + err.message;
+      document.getElementById('btnWifiConnect').disabled = false;
+      document.getElementById('btnWifiConnect').textContent = '🔗 连接';
+      showToast('❌ 配网失败: ' + err.message);
+    }
+  }
+
+  // -------- 重置配网流程 --------
+  function resetProvisioning() {
+    wifiScanResults = [];
+    selectedWifi = null;
+    resetProvisioningUI();
+    document.getElementById('provServiceHint').style.display = 'none';
+    document.getElementById('provStatus').textContent = '✅ 配网服务就绪';
+  }
+
+  function resetProvisioningUI() {
+    document.getElementById('provStepScan').style.display = '';
+    document.getElementById('provStepConnect').style.display = 'none';
+    document.getElementById('provStepResult').style.display = 'none';
+    document.getElementById('wifiList').style.display = 'none';
+    document.getElementById('wifiScanStatus').textContent = '';
+    document.getElementById('provSSID').value = '';
+    document.getElementById('provPassword').value = '';
+    document.getElementById('provPassword').disabled = false;
+    document.getElementById('provPassword').placeholder = '输入 WiFi 密码';
+    document.getElementById('btnWifiConnect').disabled = false;
+    document.getElementById('btnWifiConnect').textContent = '🔗 连接';
+    document.getElementById('provResultBox').innerHTML = '';
+  }
+
+  // -------- 关闭模态框 --------
+  function closeProvisionModal() {
+    document.getElementById('provModal').style.display = 'none';
+    if (provChars.status) {
+      try {
+        provChars.status.removeEventListener('characteristicvaluechanged', handleStatusNotify);
+        provChars.status.stopNotifications();
+      } catch (_) {}
+    }
+    if (provChars.scanResult) {
+      try {
+        provChars.scanResult.removeEventListener('characteristicvaluechanged', handleScanResultNotify);
+        provChars.scanResult.stopNotifications();
+      } catch (_) {}
+    }
+    provDeviceId = null; provDevice = null; provServer = null;
+    provChars = {}; wifiScanResults = []; selectedWifi = null;
+  }
+
+  // -------- 更新服务列表 --------
+  function updateDeviceServices(deviceId, services) {
+    const dev = bleDevices.find(d => d.id === deviceId);
+    if (!dev) return;
+
+    const knownServices = {
+      '00001800-0000-1000-8000-00805f9b34fb': 'Generic Access',
+      '00001801-0000-1000-8000-00805f9b34fb': 'Generic Attribute',
+      '0000180a-0000-1000-8000-00805f9b34fb': 'Device Information',
+      '0000180f-0000-1000-8000-00805f9b34fb': 'Battery Service',
+      '0000180d-0000-1000-8000-00805f9b34fb': 'Heart Rate',
+      '00001819-0000-1000-8000-00805f9b34fb': 'Location & Nav',
+      '0000ffe0-0000-1000-8000-00805f9b34fb': 'HM-10 Serial',
+      '0000fff0-0000-1000-8000-00805f9b34fb': 'Custom Service',
+    };
+
+    for (const svc of services) {
+      const label = knownServices[svc.uuid] || svc.uuid.slice(0, 8) + '...';
+      if (!dev.services.find(s => s.uuid === svc.uuid)) {
+        dev.services.push({ uuid: svc.uuid, label });
+      }
+    }
+    dev.lastSeen = Date.now();
+    renderAll();
+  }
+
+  // =========================================================================
+  // Render
+  // =========================================================================
+  function renderAll() {
+    const grid = document.getElementById('deviceGrid');
+    const devices = [...bleDevices];
+
+    devices.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    document.getElementById('statBLE').textContent = bleDevices.length;
+    document.getElementById('statLastScan').textContent = new Date().toLocaleTimeString('zh-CN');
+    updateDisconnectAllButton();
+
+    if (devices.length === 0) {
+      grid.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">🔵</div>
+        <div class="empty-title">点击 "BLE 扫描" 开始搜索</div>
+        <div class="empty-desc">使用浏览器内置的 Web Bluetooth API<br>扫描周围的低功耗蓝牙 (BLE) 设备</div>
+      </div>`;
+      return;
+    }
+
+    let html = '';
+    for (const dev of devices) {
+      const age = dev.lastSeen ? Math.floor((Date.now() - dev.lastSeen) / 1000) : null;
+      const ageStr = age === null ? '--' :
+                     age < 5 ? '刚刚' :
+                     age < 60 ? `${age} 秒前` :
+                     `${Math.floor(age / 60)} 分钟前`;
+
+      let connStatusHtml = '';
+      let actionHtml = '';
+      if (dev._connecting) {
+        connStatusHtml = `<span class="conn-status"><span class="conn-dot connecting"></span>连接中...</span>`;
+        actionHtml = ``;
+      } else if (dev._connected) {
+        connStatusHtml = `<span class="conn-status"><span class="conn-dot connected"></span>已连接</span>`;
+        actionHtml = `<button class="btn-sm btn-connect" style="background:var(--accent);color:#fff;" onclick="event.stopPropagation();openProvisionModal('${escAttr(dev.id)}')">📶 配网</button>
+          <button class="btn-sm btn-disconnect" onclick="disconnectDevice('${escAttr(dev.id)}')">🔌 断开</button>`;
+      } else {
+        connStatusHtml = `<span class="conn-status"><span class="conn-dot disconnected"></span>未连接</span>`;
+        actionHtml = `<button class="btn-sm btn-connect" onclick="connectToDevice('${escAttr(dev.id)}')">🔗 连接</button>`;
+      }
+
+      html += `
+      <div class="device-card">
+        <div class="card-header">
+          <div>
+            <div class="device-name">${esc(dev.name)}</div>
+            <div class="device-id">${esc(dev.id.slice(0, 60))}${dev.id.length > 60 ? '...' : ''}</div>
+          </div>
+          <span class="type-badge">BLE</span>
+        </div>
+        <div class="card-body">
+          <div class="info-row"><span class="info-label">状态</span>${connStatusHtml}</div>
+          ${dev.services && dev.services.length > 0 ? `
+          <div>
+            <span style="font-size:0.76rem;color:var(--text-dim);">GATT 服务</span>
+            <div class="service-tags">
+              ${dev.services.map(s => `<span class="service-tag">${esc(s.label)}</span>`).join('')}
+            </div>
+          </div>` : ''}
+          ${dev.wifiIP || dev.wifiSSID ? `
+          <div style="margin-top:6px;padding:10px 12px;background:rgba(48,214,162,0.08);border-radius:6px;border:1px solid rgba(48,214,162,0.25);">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:0.74rem;${dev._connected ? 'color:var(--accent2);font-weight:600;' : 'color:var(--text-dim);'}">
+              <span>${dev._connected ? '📶 WiFi 已连接' : '📶 上次网络状态'}</span>
+              ${dev._connected ? '<span style="width:6px;height:6px;border-radius:50%;background:var(--accent2);box-shadow:0 0 6px var(--accent2);"></span>' : ''}
+            </div>
+            ${dev.wifiSSID ? `<div class="info-row"><span class="info-label">📡 网络</span><span class="info-value" style="color:var(--accent2);">${esc(dev.wifiSSID)}</span></div>` : ''}
+            <div class="info-row"><span class="info-label">🌐 IP</span><span class="info-value" style="color:var(--accent2);">${esc(dev.wifiIP)}</span></div>
+            ${dev.wifiRSSI != null ? `<div class="info-row"><span class="info-label">📶 RSSI</span><span class="info-value" style="color:var(--accent2);">${dev.wifiRSSI} dBm</span></div>` : ''}
+          </div>` : ''}
+          <div class="time-ago">🕐 ${ageStr}</div>
+          <div class="card-actions">${actionHtml}</div>
+        </div>
+      </div>`;
+    }
+
+    grid.innerHTML = html;
+  }
+
+  // =========================================================================
+  // Clear
+  // =========================================================================
+  function clearAll() {
+    disconnectAll();
+    bleDevices = [];
+    renderAll();
+    showToast('🗑 已清空所有设备');
+  }
+
+  // =========================================================================
+  // Helpers
+  // =========================================================================
+  function esc(str) {
+    if (str == null) return '';
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    return String(str).replace(/[&<>"']/g, c => map[c]);
+  }
+
+  function escAttr(str) {
+    if (str == null) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function showToast(msg) {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = msg;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity 0.3s';
+      setTimeout(() => toast.remove(), 300);
+    }, 3500);
+  }
+
+  // =========================================================================
+  // Init
+  // =========================================================================
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('[BLE Scanner] 就绪 — 点击 "BLE 扫描" 开始');
+  });
+</script>
+
+</body>
+</html>
