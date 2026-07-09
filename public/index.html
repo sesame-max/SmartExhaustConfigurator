@@ -903,6 +903,11 @@
             <div>📶 信号强度: <strong>${esc(rssi)} dBm</strong></div>
           </div>
         </div>
+      </div>
+      <div id="redirectHint" style="margin-top:10px;padding:10px 14px;background:rgba(79,156,247,0.1);border-radius:8px;font-size:0.84rem;display:flex;align-items:center;gap:10px;">
+        <span class="spinner"></span>
+        <span>正在跳转到 <strong>${esc(ip)}</strong> <span id="redirectCountdown">3</span> 秒后自动打开...</span>
+        <button class="btn-sm btn-reset" onclick="cancelRedirect()" style="margin-left:auto;">取消</button>
       </div>`;
 
       document.getElementById('provStatus').textContent = `✅ 已连接 · ${ssid} · ${ip}`;
@@ -919,6 +924,11 @@
         dev.wifiRSSI = parseInt(rssi);
         dev.lastSeen = Date.now();
         renderAll();
+      }
+
+      // 自动跳转到 ESP32 IP（仅当 IP 有效且不为 0.0.0.0）
+      if (ip && ip !== '0.0.0.0' && ip !== '--') {
+        startRedirect(ip);
       }
     } else if (state === 'DISCONNECTED') {
       // 配网过程中 DISCONNECTED 是中间状态（断开旧状态准备连接新 WiFi），不报错
@@ -1359,10 +1369,62 @@
   }
 
   // =========================================================================
+  // 自动跳转到 ESP32 IP 网页
+  // =========================================================================
+  let redirectTimer = null;
+  let redirectCount = 3;
+
+  function startRedirect(ip) {
+    redirectCount = 3;
+    updateRedirectCountdown();
+    redirectTimer = setInterval(() => {
+      redirectCount--;
+      if (redirectCount <= 0) {
+        clearInterval(redirectTimer);
+        redirectTimer = null;
+        const hint = document.getElementById('redirectHint');
+        if (hint) {
+          hint.innerHTML = `<span>🔗 正在打开 http://${esc(ip)} ...</span>`;
+        }
+        window.open(`http://${ip}`, '_blank');
+      } else {
+        updateRedirectCountdown();
+      }
+    }, 1000);
+  }
+
+  function updateRedirectCountdown() {
+    const el = document.getElementById('redirectCountdown');
+    if (el) el.textContent = redirectCount;
+  }
+
+  function cancelRedirect() {
+    if (redirectTimer) {
+      clearInterval(redirectTimer);
+      redirectTimer = null;
+    }
+    const hint = document.getElementById('redirectHint');
+    if (hint) {
+      hint.innerHTML = `<span>⏹ 已取消跳转，你可手动打开 <a href="http://${document.getElementById('provSSID')?.value || ''}" target="_blank" style="color:var(--accent);text-decoration:underline;">ESP32 页面</a></span>`;
+    }
+    showToast('已取消跳转');
+  }
+
+  // 关闭模态框时清理跳转计时器
+  const _origClose = closeProvisionModal;
+  closeProvisionModal = function() {
+    if (redirectTimer) {
+      clearInterval(redirectTimer);
+      redirectTimer = null;
+    }
+    _origClose.apply(this, arguments);
+  };
+
+  // =========================================================================
   // Init
   // =========================================================================
   document.addEventListener('DOMContentLoaded', () => {
-    console.log('[BLE Scanner] 就绪 — 点击 "BLE 扫描" 开始');
+    console.log('[智能排风配置工具] 就绪 — 点击 "BLE 扫描" 开始');
   });
 </script>
 
