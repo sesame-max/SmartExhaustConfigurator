@@ -1,7 +1,7 @@
 {
-  "name": "bluetooth-scanner",
+  "name": "smart-vent-config",
   "version": "1.0.0",
-  "description": "网页蓝牙设备扫描器 - BLE + 经典蓝牙",
+  "description": "智能排风配置工具 - BLE WiFi 配网",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

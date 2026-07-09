@@ -12,7 +12,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 server.listen(PORT, () => {
   console.log('');
   console.log('╔══════════════════════════════════════════════════╗');
-  console.log('║     BLE 蓝牙设备扫描器                            ║');
+  console.log('║     智能排风配置工具                               ║');
   console.log(`║     地址: http://localhost:${PORT}                   ║`);
   console.log('║     使用 Chrome/Edge 打开                         ║');
   console.log('╚══════════════════════════════════════════════════╝');
