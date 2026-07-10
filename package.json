@@ -4,10 +4,15 @@
   "description": "智能排风配置工具 - BLE WiFi 配网",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "deploy": "wrangler deploy",
+    "preview": "wrangler dev"
   },
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "wrangler": "^4.110.0"
   }
 }
