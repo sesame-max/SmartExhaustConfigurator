@@ -301,6 +301,112 @@
     vertical-align: middle; margin-right: 6px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ================================================================
+     Tabs
+     ================================================================ */
+  .tabs {
+    display: flex; gap: 0; padding: 0 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .tab {
+    padding: 12px 24px; cursor: pointer; font-size: 0.88rem; font-weight: 500;
+    color: var(--text-dim); border: none; background: none;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s; font-family: inherit;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .tab:hover { color: var(--text); background: var(--surface2); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); background: transparent; }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ================================================================
+     SSDP Device Cards
+     ================================================================ */
+  .ssdp-device-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px;
+  }
+
+  .ssdp-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 22px;
+    transition: all 0.25s; position: relative; overflow: hidden;
+  }
+  .ssdp-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    transform: translateY(-2px);
+  }
+  .ssdp-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--accent);
+  }
+
+  .ssdp-card .card-header {
+    display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px;
+  }
+  .ssdp-card .device-name {
+    font-weight: 600; font-size: 1rem; word-break: break-all;
+  }
+  .ssdp-card .device-usn {
+    font-size: 0.75rem; color: var(--text-dim);
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    word-break: break-all; margin-top: 2px;
+  }
+
+  .bound-badge {
+    padding: 3px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; flex-shrink: 0;
+  }
+  .bound-badge.yes { background: rgba(48,214,162,0.15); color: var(--accent2); }
+  .bound-badge.no  { background: rgba(247,160,79,0.15); color: var(--warning); }
+
+  .ssdp-card .card-body { display: flex; flex-direction: column; gap: 6px; }
+
+  .printer-info {
+    margin-top: 6px; padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 0.84rem;
+  }
+  .printer-info.bound {
+    background: rgba(48,214,162,0.08);
+    border: 1px solid rgba(48,214,162,0.25);
+  }
+  .printer-info.unbound {
+    background: rgba(247,160,79,0.08);
+    border: 1px solid rgba(247,160,79,0.25);
+  }
+
+  .printer-info .prow {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 3px;
+  }
+  .printer-info .plabel { color: var(--text-dim); min-width: 48px; font-size: 0.78rem; }
+  .printer-info .pvalue {
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.82rem; word-break: break-all;
+  }
+  .printer-info .pvalue.accent { color: var(--accent2); font-weight: 600; }
+
+  .ssdp-controls {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  }
+
+  .dev-status {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 0.76rem; font-weight: 500;
+  }
+  .dev-dot {
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  }
+  .dev-dot.online  { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+  .dev-dot.offline { background: var(--text-dim); }
+
+  @media (max-width: 640px) {
+    .tabs { padding-left: 16px; padding-right: 16px; overflow-x: auto; }
+    .ssdp-device-grid { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -311,7 +417,7 @@
     <div class="logo">📶</div>
     <div class="title-group">
       <h1>智能排风配置工具</h1>
-      <p>低功耗蓝牙 · 设备发现 & WiFi 配网</p>
+      <p>SSDP 局域网发现 · BLE WiFi 配网</p>
     </div>
   </div>
   <div class="header-right">
@@ -327,39 +433,95 @@
   </div>
 </header>
 
-<!-- Stats -->
-<div class="stats-bar">
-  <div class="stat-item">
-    <span class="stat-dot ble"></span>
-    <span class="stat-value" id="statBLE">0</span>
-    <span class="stat-label">BLE 设备</span>
-  </div>
-  <div class="stat-item">
-    <span class="stat-value" id="statLastScan">--</span>
-    <span class="stat-label">最近扫描</span>
-  </div>
-</div>
+<!-- Tabs -->
+<nav class="tabs">
+  <button class="tab active" data-tab="ssdp">📡 SSDP 设备发现</button>
+  <button class="tab" data-tab="ble">📶 BLE 配网</button>
+</nav>
 
-<!-- Main -->
-<main class="main">
-  <div class="info-banner" id="infoBanner">
-    <span>💡</span>
-    <span>
-      <strong>BLE 扫描</strong>：点击按钮，浏览器弹出设备选择器，显示周围 BLE 设备。<br>
-      连接后可查看 GATT 服务，或使用 <strong>WiFi 配网</strong> 功能为 ESP32 配置网络。
-    </span>
-  </div>
-  <div class="device-grid" id="deviceGrid">
-    <div class="empty-state">
-      <div class="empty-icon">🔵</div>
-      <div class="empty-title">点击 "BLE 扫描" 开始搜索</div>
-      <div class="empty-desc">
-        使用浏览器内置的 Web Bluetooth API<br>
-        扫描周围的低功耗蓝牙 (BLE) 设备
-      </div>
+<!-- ==================================================================
+     SSDP Content
+     ================================================================== -->
+<div id="ssdpContent" class="tab-content active">
+  <div class="stats-bar">
+    <div class="stat-item">
+      <span class="stat-dot" style="background:var(--accent);"></span>
+      <span class="stat-value" id="statSSDP">0</span>
+      <span class="stat-label">智能排风设备</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value" id="statSSDPLast">--</span>
+      <span class="stat-label">最近发现</span>
     </div>
   </div>
-</main>
+
+  <main class="main">
+    <div class="info-banner">
+      <span>📡</span>
+      <span>
+        <strong>SSDP 局域网发现</strong>：自动监听 UDP 多播 (239.255.255.250:1900) 发现设备。<br>
+        设备上线自动出现，点击 <strong>打开网页</strong> 进入设备管理界面。
+        <br><span style="font-size:0.78rem;color:var(--warning);">
+          ⚠️ 如果搜索不到设备，请检查：① 设备与电脑在同一局域网 ② Windows 防火墙放行 UDP 1900 端口
+        </span>
+      </span>
+    </div>
+    <div style="margin-bottom:16px;" class="ssdp-controls">
+      <button class="btn btn-ble" onclick="scanSSDP()">🔍 扫描局域网</button>
+      <button class="btn btn-reset" onclick="showSSDPDiagnostics()" style="font-size:0.78rem;">🔧 诊断</button>
+      <span id="ssdpStatus" style="font-size:0.82rem;color:var(--text-dim);"></span>
+      <span id="ssdpStatusExtra" style="display:inline;"></span>
+    </div>
+    <div class="ssdp-device-grid" id="ssdpDeviceGrid">
+      <div class="empty-state" id="ssdpEmptyState">
+        <div class="empty-icon">📡</div>
+        <div class="empty-title">等待设备...</div>
+        <div class="empty-desc">
+          正在监听局域网 SSDP 广播 (239.255.255.250:1900)<br>
+          智能排风设备上线后将自动显示在这里<br>
+          <span style="font-size:0.78rem;color:var(--warning);">如果长时间无设备出现，点击 🔧 诊断 检查网络状态</span>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ==================================================================
+     BLE Content (原有)
+     ================================================================== -->
+<div id="bleContent" class="tab-content">
+  <div class="stats-bar">
+    <div class="stat-item">
+      <span class="stat-dot ble"></span>
+      <span class="stat-value" id="statBLE">0</span>
+      <span class="stat-label">BLE 设备</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value" id="statLastScan">--</span>
+      <span class="stat-label">最近扫描</span>
+    </div>
+  </div>
+
+  <main class="main">
+    <div class="info-banner" id="infoBanner">
+      <span>💡</span>
+      <span>
+        <strong>BLE 扫描</strong>：点击按钮，浏览器弹出设备选择器，显示周围 BLE 设备。<br>
+        连接后可查看 GATT 服务，或使用 <strong>WiFi 配网</strong> 功能为 ESP32 配置网络。
+      </span>
+    </div>
+    <div class="device-grid" id="deviceGrid">
+      <div class="empty-state">
+        <div class="empty-icon">🔵</div>
+        <div class="empty-title">点击 "BLE 扫描" 开始搜索</div>
+        <div class="empty-desc">
+          使用浏览器内置的 Web Bluetooth API<br>
+          扫描周围的低功耗蓝牙 (BLE) 设备
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
 
 <!-- ==================================================================
      WiFi Provisioning Modal
@@ -1421,10 +1583,218 @@
   };
 
   // =========================================================================
+  // Tab 切换
+  // =========================================================================
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      const content = document.getElementById(tab.dataset.tab + 'Content');
+      if (content) content.classList.add('active');
+    });
+  });
+
+  // =========================================================================
+  // SSDP 设备发现 (SSE 客户端)
+  // =========================================================================
+  const ssdpDevices = new Map(); // USN -> device
+  let ssdpConnected = false;
+  let ssdpReconnectTimer = null;
+
+  function connectSSDP() {
+    if (ssdpReconnectTimer) {
+      clearTimeout(ssdpReconnectTimer);
+      ssdpReconnectTimer = null;
+    }
+
+    const es = new EventSource('/api/devices/stream');
+
+    es.onopen = () => {
+      ssdpConnected = true;
+      updateSSDPStatus('🟢 已连接，监听 SSDP 广播中...', '');
+    };
+
+    es.onmessage = (event) => {
+      // 忽略心跳
+      if (event.data === ':keepalive') return;
+      try {
+        const data = JSON.parse(event.data);
+        handleSSDPEvent(data);
+      } catch (e) {
+        console.warn('[SSDP] 解析错误:', e);
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      ssdpConnected = false;
+      updateSSDPStatus('🔴 连接断开，正在重试...', 'error');
+      ssdpReconnectTimer = setTimeout(connectSSDP, 3000);
+    };
+  }
+
+  function updateSSDPStatus(text, extra) {
+    const el = document.getElementById('ssdpStatus');
+    if (el) el.textContent = text;
+    const extraEl = document.getElementById('ssdpStatusExtra');
+    if (extraEl) {
+      if (extra === 'error') {
+        extraEl.innerHTML = '<span style="color:var(--warning);font-size:0.78rem;">请检查：① 服务器是否运行 ② 防火墙是否放行 UDP 1900 端口</span>';
+      } else {
+        extraEl.innerHTML = '';
+      }
+    }
+  }
+
+  function handleSSDPEvent(data) {
+    if (data.type === 'remove') {
+      // 不删除，标记为离线（保留设备卡片，显示为离线状态）
+      const existing = ssdpDevices.get(data.usn);
+      if (existing) {
+        existing.lastSeen = 0; // 使 isOnline 为 false
+        existing._offlineSince = existing._offlineSince || Date.now();
+        ssdpDevices.set(data.usn, existing);
+      }
+    } else if (data.type === 'update' && data.device) {
+      ssdpDevices.set(data.device.usn || data.device.location, data.device);
+    }
+    renderSSDPDevices();
+  }
+
+  function renderSSDPDevices() {
+    // 清理离线超过 5 分钟的设备
+    const now5m = Date.now();
+    for (const [key, dev] of ssdpDevices) {
+      if (dev.lastSeen === 0 && dev._offlineSince && (now5m - dev._offlineSince > 300000)) {
+        ssdpDevices.delete(key);
+      }
+    }
+
+    const grid = document.getElementById('ssdpDeviceGrid');
+    const empty = document.getElementById('ssdpEmptyState');
+    const devices = [...ssdpDevices.values()];
+
+    document.getElementById('statSSDP').textContent = devices.length;
+    document.getElementById('statSSDPLast').textContent = devices.length > 0
+      ? new Date().toLocaleTimeString('zh-CN') : '--';
+
+    if (devices.length === 0) {
+      empty.style.display = '';
+      grid.innerHTML = '';
+      return;
+    }
+    empty.style.display = 'none';
+
+    // 按最近发现排序
+    devices.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+
+    let html = '';
+    for (const dev of devices) {
+      const bound = dev['printer-bound'] === 'yes';
+      const boundClass = bound ? 'yes' : 'no';
+      const age = dev.lastSeen ? Math.floor((Date.now() - dev.lastSeen) / 1000) : null;
+      const isOnline = age !== null && age < 15; // 15 秒没收包视为离线
+      const ageStr = age === null ? '--' :
+                     age < 5 ? '刚刚' :
+                     age < 15 ? `${age} 秒前` :
+                     '离线';
+
+      // 从 USN 提取设备名称
+      const usnId = (dev.usn || '').replace('uuid:SMARTEXHAUST-', '') || '未知设备';
+
+      html += `
+      <div class="ssdp-card">
+        <div class="card-header">
+          <div>
+            <div class="device-name">📡 SMARTEXHAUST-${esc(usnId.slice(0, 12))}</div>
+            <div class="device-usn">${esc(dev.usn || '')}</div>
+          </div>
+          <span class="bound-badge ${boundClass}">${bound ? '🖨️ 已绑定' : '⚙️ 未绑定'}</span>
+        </div>
+        <div class="card-body">
+          <div class="info-row">
+            <span class="info-label">状态</span>
+            <span class="dev-status">
+              <span class="dev-dot ${isOnline ? 'online' : 'offline'}"></span>
+              ${isOnline ? '在线' : '离线'}
+            </span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">地址</span>
+            <span class="info-value">${esc(dev.from || '')}</span>
+          </div>
+          ${dev.location ? `
+          <div class="info-row">
+            <span class="info-label">网页</span>
+            <span class="info-value" style="color:var(--accent);">${esc(dev.location)}</span>
+          </div>` : ''}
+          ${bound ? `
+          <div class="printer-info bound">
+            <div class="prow"><span class="plabel">🖨️</span><span class="pvalue accent">${esc(dev['printer-name'] || '未知')}</span></div>
+            <div class="prow"><span class="plabel">🔢</span><span class="pvalue">序列号: ${esc(dev['printer-serial'] || '--')}</span></div>
+          </div>` : `
+          <div class="printer-info unbound">
+            <div class="prow"><span>⚠️ 未绑定打印机</span></div>
+          </div>`}
+          <div class="time-ago">🕐 ${ageStr}</div>
+          <div class="card-actions">
+            ${dev.location && isOnline ? `<button class="btn-sm btn-connect" onclick="window.open('${escAttr(dev.location)}','_blank')">🔗 打开网页</button>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    grid.innerHTML = html;
+  }
+
+  function scanSSDP() {
+    const status = document.getElementById('ssdpStatus');
+    status.textContent = '⏳ 正在扫描局域网...';
+    fetch('/api/devices/scan', { method: 'POST' })
+      .then(r => r.json())
+      .then(() => status.textContent = '✅ 扫描请求已发送，等待设备响应...')
+      .catch(e => status.textContent = '❌ 扫描失败: ' + e.message);
+  }
+
+  function showSSDPDiagnostics() {
+    fetch('/api/devices/debug')
+      .then(r => r.json())
+      .then(data => {
+        let msg = '=== SSDP 诊断信息 ===\n';
+        msg += `运行时间: ${data.uptime}\n`;
+        msg += `本机 IP: ${data.localIPs.map(i => `${i.name}=${i.address}`).join(', ')}\n`;
+        msg += `已发现设备: ${data.deviceCount}\n`;
+        msg += `SSE 客户端: ${data.sseClients}\n`;
+        if (data.devices.length > 0) {
+          msg += '\n--- 设备列表 ---\n';
+          data.devices.forEach(d => {
+            msg += `  ${d.usn}\n    位置: ${d.location}\n    最后在线: ${d.lastSeen}\n    绑定: ${d.bound}\n`;
+          });
+        }
+        msg += '\n--- 最近 SSDP 日志 (后 50 条) ---\n';
+        data.recentLog.forEach(l => {
+          msg += `  [${l.time}] ${l.msg}\n`;
+        });
+        if (data.recentLog.length === 0) {
+          msg += '  (无日志 - 未收到任何 UDP 消息)\n';
+          msg += '\n⚠️ 可能原因:\n';
+          msg += '  1. Windows 防火墙阻止了 UDP 1900 端口\n';
+          msg += '  2. 设备不在同一局域网\n';
+          msg += '  3. 需要以管理员权限运行\n';
+        }
+        alert(msg);
+      })
+      .catch(e => alert('诊断失败: ' + e.message));
+  }
+
+  // =========================================================================
   // Init
   // =========================================================================
   document.addEventListener('DOMContentLoaded', () => {
-    console.log('[智能排风配置工具] 就绪 — 点击 "BLE 扫描" 开始');
+    console.log('[智能排风配置工具] 就绪');
+    // 自动连接 SSE
+    connectSSDP();
   });
 </script>
 
