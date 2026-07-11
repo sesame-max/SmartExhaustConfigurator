@@ -1288,6 +1288,7 @@
       } else if (dev._connected) {
         connStatusHtml = `<span class="conn-status"><span class="conn-dot connected"></span>已连接</span>`;
         actionHtml = `<button class="btn-sm btn-connect" style="background:var(--accent);color:#fff;" onclick="event.stopPropagation();openProvisionModal('${escAttr(dev.id)}')">📶 配网</button>
+          ${dev.wifiIP ? `<button class="btn-sm btn-connect" onclick="window.open('http://${escAttr(dev.wifiIP)}/','_blank')">🌐 访问设备</button>` : ''}
           <button class="btn-sm btn-disconnect" onclick="disconnectDevice('${escAttr(dev.id)}')">🔌 断开</button>`;
       } else {
         connStatusHtml = `<span class="conn-status"><span class="conn-dot disconnected"></span>未连接</span>`;
